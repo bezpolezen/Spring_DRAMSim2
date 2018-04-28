@@ -76,8 +76,16 @@ MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ost
 	//bus related fields
 	outgoingCmdPacket = NULL;
 	outgoingDataPacket = NULL;
+	// gagan
+	mirrorCmdPacket = NULL;
+	mirrorDataPacket = NULL;
+	
 	dataCyclesLeft = 0;
 	cmdCyclesLeft = 0;
+
+	// gagan
+	mirrorCmdCyclesLeft = 0;
+	mirrorDataCyclesLeft = 0;
 
 	//set here to avoid compile errors
 	currentClockCycle = 0;
@@ -202,6 +210,17 @@ void MemoryController::update()
 		}
 	}
 
+	// gagan
+	if (mirrorCmdPacket != NULL)
+	{
+		mirrorCmdCyclesLeft--;
+		if (mirrorCmdCyclesLeft == 0) //packet is ready to be received by rank
+		{
+			(*ranks)[mirrorCmdPacket->rank]->receiveFromBus(mirrorCmdPacket);
+			mirrorCmdPacket = NULL;
+		}
+	}
+
 	//check for outgoing data packets and handle countdowns
 	if (outgoingDataPacket != NULL)
 	{
@@ -216,6 +235,24 @@ void MemoryController::update()
 
 			(*ranks)[outgoingDataPacket->rank]->receiveFromBus(outgoingDataPacket);
 			outgoingDataPacket=NULL;
+		}
+	}
+
+	// gagan
+	if (mirrorDataPacket != NULL)
+	{
+		mirrorDataCyclesLeft--;
+		if (mirrorDataCyclesLeft == 0)
+		{
+			//inform upper levels that a write is done
+			if (parentMemorySystem->WriteDataDone!=NULL)
+			{
+			  //////// urgent
+				(*parentMemorySystem->WriteDataDone)(parentMemorySystem->systemID,mirrorDataPacket->physicalAddress, currentClockCycle);
+			}
+
+			(*ranks)[mirrorDataPacket->rank]->receiveFromBus(mirrorDataPacket);
+			mirrorDataPacket=NULL;
 		}
 	}
 
@@ -249,6 +286,10 @@ void MemoryController::update()
 			}
 
 			outgoingDataPacket = writeDataToSend[0];
+			// gagan
+			//mirrorDataPacket = writeDataToSend[0];
+			mirrorDataPacket = new BusPacket(outgoingDataPacket->busPacketType, outgoingDataPacket->physicalAddress, outgoingDataPacket->column, outgoingDataPacket->row, outgoingDataPacket->rank + NUM_RANKS/2, outgoingDataPacket->bank, outgoingDataPacket->data, dramsim_log);
+			//mirrorDataPacket->rank += NUM_RANKS/2;
 			dataCyclesLeft = BL/2;
 
 			totalTransactions++;
@@ -298,6 +339,8 @@ void MemoryController::update()
 		//for readability's sake
 		unsigned rank = poppedBusPacket->rank;
 		unsigned bank = poppedBusPacket->bank;
+		// gagan
+		unsigned mirrorRank = rank + (NUM_RANKS / 2);
 		switch (poppedBusPacket->busPacketType)
 		{
 			case READ_P:
@@ -366,12 +409,24 @@ void MemoryController::update()
 							bankStates[rank][bank].nextActivate);
 					bankStates[rank][bank].lastCommand = WRITE_P;
 					bankStates[rank][bank].stateChangeCountdown = WRITE_TO_PRE_DELAY;
+
+					// gagan
+					bankStates[mirrorRank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
+							bankStates[mirrorRank][bank].nextActivate);
+					bankStates[mirrorRank][bank].lastCommand = WRITE_P;
+					bankStates[mirrorRank][bank].stateChangeCountdown = WRITE_TO_PRE_DELAY;
+					
 				}
 				else if (poppedBusPacket->busPacketType == WRITE)
 				{
 					bankStates[rank][bank].nextPrecharge = max(currentClockCycle + WRITE_TO_PRE_DELAY,
 							bankStates[rank][bank].nextPrecharge);
 					bankStates[rank][bank].lastCommand = WRITE;
+
+					// gagan
+					bankStates[mirrorRank][bank].nextPrecharge = max(currentClockCycle + WRITE_TO_PRE_DELAY,
+							bankStates[mirrorRank][bank].nextPrecharge);
+					bankStates[mirrorRank][bank].lastCommand = WRITE;					
 				}
 
 
@@ -428,10 +483,26 @@ void MemoryController::update()
 				bankStates[rank][bank].nextActivate = max(currentClockCycle + tRC, bankStates[rank][bank].nextActivate);
 				bankStates[rank][bank].nextPrecharge = max(currentClockCycle + tRAS, bankStates[rank][bank].nextPrecharge);
 
+				// gagan
+				if (poppedBusPacket->activatePacketType == WRITE_ACTIVATE)
+				  {
+				    bankStates[mirrorRank][bank].currentBankState = RowActive;
+				    bankStates[mirrorRank][bank].lastCommand = ACTIVATE;
+				    bankStates[mirrorRank][bank].openRowAddress = poppedBusPacket->row;
+				    bankStates[mirrorRank][bank].nextActivate = max(currentClockCycle + tRC, bankStates[mirrorRank][bank].nextActivate);
+				    bankStates[mirrorRank][bank].nextPrecharge = max(currentClockCycle + tRAS, bankStates[mirrorRank][bank].nextPrecharge);
+				  }
+
 				//if we are using posted-CAS, the next column access can be sooner than normal operation
 
 				bankStates[rank][bank].nextRead = max(currentClockCycle + (tRCD-AL), bankStates[rank][bank].nextRead);
 				bankStates[rank][bank].nextWrite = max(currentClockCycle + (tRCD-AL), bankStates[rank][bank].nextWrite);
+
+				// gagan
+				if (poppedBusPacket->activatePacketType == WRITE_ACTIVATE)
+				  bankStates[mirrorRank][bank].nextWrite = max(currentClockCycle + (tRCD-AL), bankStates[mirrorRank][bank].nextWrite);
+				
+				
 
 				for (size_t i=0;i<NUM_BANKS;i++)
 				{
@@ -440,6 +511,18 @@ void MemoryController::update()
 						bankStates[rank][i].nextActivate = max(currentClockCycle + tRRD, bankStates[rank][i].nextActivate);
 					}
 				}
+
+				// gagan
+				if (poppedBusPacket->activatePacketType == WRITE_ACTIVATE)
+				  {
+				    for (size_t i=0;i<NUM_BANKS;i++)
+				      {
+					if (i!=poppedBusPacket->bank)
+					  {
+					    bankStates[mirrorRank][i].nextActivate = max(currentClockCycle + tRRD, bankStates[mirrorRank][i].nextActivate);
+					  }
+				      }
+				  }
 
 				break;
 			case PRECHARGE:
@@ -485,6 +568,17 @@ void MemoryController::update()
 			exit(-1);
 		}
 		outgoingCmdPacket = poppedBusPacket;
+		// gagan
+		if (poppedBusPacket->busPacketType == WRITE || poppedBusPacket->busPacketType == WRITE_P || (poppedBusPacket->busPacketType == ACTIVATE && poppedBusPacket->activatePacketType == WRITE_ACTIVATE))
+		  {
+		    mirrorCmdPacket = new BusPacket(poppedBusPacket->busPacketType, poppedBusPacket->physicalAddress, poppedBusPacket->column, poppedBusPacket->row, poppedBusPacket->rank + NUM_RANKS/2, poppedBusPacket->bank, poppedBusPacket->data, dramsim_log);
+		    //mirrorCmdPacket = new poppedBusPacket;
+		    //mirrorCmdPacket->rank = mirrorRank;
+		    mirrorCmdCyclesLeft = tCMD;
+		  }
+		else
+		  mirrorCmdPacket = NULL;
+		
 		cmdCyclesLeft = tCMD;
 
 	}
@@ -539,6 +633,12 @@ void MemoryController::update()
 			BusPacket *command = new BusPacket(bpType, transaction->address,
 					newTransactionColumn, newTransactionRow, newTransactionRank,
 					newTransactionBank, transaction->data, dramsim_log);
+
+			// gagan
+			if(bpType == WRITE || bpType == WRITE_P)
+			  ACTcommand->activatePacketType = WRITE_ACTIVATE;
+			else if(bpType == READ || bpType == READ_P)
+			  ACTcommand->activatePacketType = READ_ACTIVATE;
 
 
 

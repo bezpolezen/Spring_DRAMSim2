@@ -624,38 +624,68 @@ vector<BusPacket *> &CommandQueue::getCommandQueue(unsigned rank, unsigned bank)
 //checks if busPacket is allowed to be issued
 bool CommandQueue::isIssuable(BusPacket *busPacket)
 {
+  // gagan
+  unsigned mirrorRank = busPacket->rank + (NUM_RANKS / 2);
 	switch (busPacket->busPacketType)
 	{
 	case REFRESH:
 
 		break;
 	case ACTIVATE:
-		if ((bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle ||
-		        bankStates[busPacket->rank][busPacket->bank].currentBankState == Refreshing) &&
-		        currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextActivate &&
-		        tFAWCountdown[busPacket->rank].size() < 4)
+	  if ((bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle ||
+	       bankStates[busPacket->rank][busPacket->bank].currentBankState == Refreshing) &&
+	      currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextActivate &&
+	      tFAWCountdown[busPacket->rank].size() < 4)
+	    {
+	      // gagan
+	      if(busPacket->activatePacketType == WRITE_ACTIVATE)
 		{
-			return true;
+		  if ((bankStates[mirrorRank][busPacket->bank].currentBankState == Idle ||
+		       bankStates[mirrorRank][busPacket->bank].currentBankState == Refreshing) &&
+		      currentClockCycle >= bankStates[mirrorRank][busPacket->bank].nextActivate &&
+		      tFAWCountdown[mirrorRank].size() < 4)
+		    {
+		      return true;
+		    }
+		  else
+		    {
+		      return false;
+		    }
 		}
-		else
+	      else
 		{
-			return false;
+		  return true;
 		}
+		    
+	    }
+	  else
+	    {
+	      return false;
+	    }
 		break;
 	case WRITE:
 	case WRITE_P:
-		if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive &&
-		        currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextWrite &&
-		        busPacket->row == bankStates[busPacket->rank][busPacket->bank].openRowAddress &&
-		        rowAccessCounters[busPacket->rank][busPacket->bank] < TOTAL_ROW_ACCESSES)
+	  if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive &&
+	      currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextWrite &&
+	      busPacket->row == bankStates[busPacket->rank][busPacket->bank].openRowAddress &&
+	      rowAccessCounters[busPacket->rank][busPacket->bank] < TOTAL_ROW_ACCESSES)
+	    {
+	      // gagan
+	      if (bankStates[mirrorRank][busPacket->bank].currentBankState == RowActive &&
+		  currentClockCycle >= bankStates[mirrorRank][busPacket->bank].nextWrite &&
+		  busPacket->row == bankStates[mirrorRank][busPacket->bank].openRowAddress &&
+		  rowAccessCounters[mirrorRank][busPacket->bank] < TOTAL_ROW_ACCESSES)
 		{
-			return true;
+		  return true;
 		}
-		else
-		{
-			return false;
-		}
-		break;
+	      else
+		return false;
+	    }
+	  else
+	    {
+	      return false;
+	    }
+	  break;
 	case READ_P:
 	case READ:
 		if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive &&

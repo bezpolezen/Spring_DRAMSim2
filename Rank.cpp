@@ -157,7 +157,9 @@ void Rank::receiveFromBus(BusPacket *packet)
 		        currentClockCycle < bankStates[packet->bank].nextWrite ||
 		        packet->row != bankStates[packet->bank].openRowAddress)
 		{
-			ERROR("== Error - Rank " << id << " received a WRITE when not allowed");
+		  // std::cout << (bankStates[packet->bank].currentBankState != RowActive) <<  (currentClockCycle < bankStates[packet->bank].nextWrite) <<
+		  //  (packet->row != bankStates[packet->bank].openRowAddress) << std::endl;
+		  ERROR("== Error - Rank " << id << " received a WRITE when not allowed");
 			bankStates[packet->bank].print();
 			exit(0);
 		}

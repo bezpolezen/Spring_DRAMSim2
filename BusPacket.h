@@ -39,40 +39,53 @@
 
 namespace DRAMSim
 {
-enum BusPacketType
-{
-	READ,
-	READ_P,
-	WRITE,
-	WRITE_P,
-	ACTIVATE,
-	PRECHARGE,
-	REFRESH,
-	DATA
-};
+  enum BusPacketType
+  {
+    READ,
+    READ_P,
+    WRITE,
+    WRITE_P,
+    ACTIVATE,
+    PRECHARGE,
+    REFRESH,
+    DATA
+  };
 
-class BusPacket
-{
-	BusPacket();
-	ostream &dramsim_log; 
-public:
-	//Fields
-	BusPacketType busPacketType;
-	unsigned column;
-	unsigned row;
-	unsigned bank;
-	unsigned rank;
-	uint64_t physicalAddress;
-	void *data;
+  // gagan
+  enum ActivatePacketType
+  {
+    NORMAL,
+    READ_ACTIVATE,
+    WRITE_ACTIVATE
+  };
 
-	//Functions
-	BusPacket(BusPacketType packtype, uint64_t physicalAddr, unsigned col, unsigned rw, unsigned r, unsigned b, void *dat, ostream &dramsim_log_);
+ 
+  class BusPacket
+  {
+    BusPacket();
+    ostream &dramsim_log; 
+  public:
+    //Fields
+    BusPacketType busPacketType;
+    unsigned column;
+    unsigned row;
+    unsigned bank;
+    unsigned rank;
+    uint64_t physicalAddress;
+    void *data;
 
-	void print();
-	void print(uint64_t currentClockCycle, bool dataStart);
-	void printData() const;
+    // gagan
+    ActivatePacketType activatePacketType;
 
-};
+    //Functions
+    BusPacket(BusPacketType packtype, uint64_t physicalAddr, unsigned col, unsigned rw, unsigned r, unsigned b, void *dat, ostream &dramsim_log_);
+    // BusPacket(const BusPacket &obj);
+
+    void print();
+    void print(uint64_t currentClockCycle, bool dataStart);
+    void printData() const;
+
+  };
 }
 
 #endif

@@ -115,6 +115,9 @@ MemorySystem::MemorySystem(unsigned id, unsigned int megsOfMemory, CSVWriter &cs
 	// If this is set, effectively override the number of ranks
 	if (megsOfMemory != 0)
 	{
+	  // gagan
+	  std::cout << "megsOfStoragePerRank = " << megsOfStoragePerRank << " megsOfMemory = " << megsOfMemory << std::endl;
+	  
 		NUM_RANKS = megsOfMemory / megsOfStoragePerRank;
 		NUM_RANKS_LOG = dramsim_log2(NUM_RANKS);
 		if (NUM_RANKS == 0)

@@ -308,5 +308,9 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 				<<" Col="<<newTransactionColumn<<"\n"); 
 	}
 
+	// std::cout << "gagan = " << newTransactionRank << " " << NUM_RANKS << std::endl;
+
+	newTransactionRank = newTransactionRank % (NUM_RANKS / 2);
+
 }
 };

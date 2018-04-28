@@ -102,6 +102,12 @@ private:
 	BusPacket *outgoingDataPacket;
 	unsigned dataCyclesLeft;
 
+	// gagan
+	BusPacket *mirrorCmdPacket;
+	unsigned mirrorCmdCyclesLeft;
+	BusPacket *mirrorDataPacket;
+	unsigned mirrorDataCyclesLeft;
+
 	uint64_t totalTransactions;
 	vector<uint64_t> grandTotalBankAccesses; 
 	vector<uint64_t> totalReadsPerBank;
